@@ -17,6 +17,7 @@ from flask import (
     session,
 )
 from models import db, Firefighter, TestResult
+from sqlalchemy import or_
 
 
 # Charge le fichier .env si présent (local / prod)
@@ -49,6 +50,30 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+    GRADES = [
+        "Sapeur",
+        "Caporal",
+        "Caporal-chef",
+        "Sergent",
+        "Sergent-chef",
+        "Adjudant",
+        "Adjudant-chef",
+        "Lieutenant",
+        "Capitaine",
+        "Commandant",
+        "Lieutenant-colonel",
+        "Colonel",
+    ]
+
+    CASERNES = [
+        "Digoin",
+        "Le Creusot",
+        "Chalon sur Saône",
+        "Macon",
+        "Loisy",
+        "Crissey",
+        "Cuiseaux",
+    ]
 
     # --- Auth decorator ---
     def login_required(view):
@@ -118,34 +143,63 @@ def create_app():
         return render_template("agents.html", agents=data, q=q, searched=searched)
 
     # ---- EXPORT CSV (AGENTS) ----
-    @app.route("/agents/export.csv")
+
+    @app.route("/export.csv")
     @login_required
-    def agents_export_csv():
+    def export_all_csv():
         q = request.args.get("q", "").strip()
-        query = Firefighter.query
 
+        # On exporte toutes les lignes de TestResult,
+        # en joignant les infos de l'agent.
+        query = db.session.query(TestResult, Firefighter).join(
+            Firefighter, Firefighter.id == TestResult.firefighter_id
+        )
+
+        # Filtre recherche (comme ta page Agents)
         if q:
-            # Même logique que la page (sinon export incohérent)
-            if len(q) == 1:
-                like = f"{q}%"
-            else:
-                like = f"%{q}%"
-
+            like = f"%{q}%"
             query = query.filter(
-                (Firefighter.nom.ilike(like))
-                | (Firefighter.prenom.ilike(like))
-                | (Firefighter.matricule.ilike(like))
+                or_(
+                    Firefighter.nom.ilike(like),
+                    Firefighter.prenom.ilike(like),
+                    Firefighter.matricule.ilike(like),
+                )
             )
 
-        agents_list = query.order_by(
-            Firefighter.nom.asc(), Firefighter.prenom.asc()
+        # Trier par agent puis date (du plus récent au plus ancien)
+        rows = query.order_by(
+            Firefighter.nom.asc(),
+            Firefighter.prenom.asc(),
+            TestResult.date_realisation.desc(),
         ).all()
 
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Matricule", "Nom", "Prénom", "Grade", "Caserne"])
 
-        for a in agents_list:
+        # En-têtes CSV
+        writer.writerow(
+            [
+                "Matricule",
+                "Nom",
+                "Prénom",
+                "Grade",
+                "Caserne",
+                "Date",
+                "Assis-debout G",
+                "Assis-debout D",
+                "Heel raise G",
+                "Heel raise D",
+                "Side hop G",
+                "Side hop D",
+                "Wall test G",
+                "Wall test D",
+            ]
+        )
+
+        def fmt(v):
+            return "" if v is None else str(v)
+
+        for r, a in rows:
             writer.writerow(
                 [
                     a.matricule or "",
@@ -153,6 +207,19 @@ def create_app():
                     a.prenom or "",
                     a.grade or "",
                     a.caserne or "",
+                    (
+                        r.date_realisation.strftime("%Y-%m-%d")
+                        if r.date_realisation
+                        else ""
+                    ),
+                    fmt(r.assis_debout_g),
+                    fmt(r.assis_debout_d),
+                    fmt(r.heel_raise_g),
+                    fmt(r.heel_raise_d),
+                    fmt(r.side_hop_g),
+                    fmt(r.side_hop_d),
+                    fmt(r.wall_test_g),
+                    fmt(r.wall_test_d),
                 ]
             )
 
@@ -162,7 +229,7 @@ def create_app():
         return Response(
             csv_content,
             mimetype="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=agents.csv"},
+            headers={"Content-Disposition": "attachment; filename=agents_tests.csv"},
         )
 
     @app.route("/agents/new", methods=["GET", "POST"])
@@ -186,7 +253,9 @@ def create_app():
             flash("Agent ajouté.", "success")
             return redirect(url_for("agents"))
 
-        return render_template("agent_form.html", agent=None)
+        return render_template(
+            "agent_form.html", agent=None, grades=GRADES, casernes=CASERNES
+        )
 
     @app.route("/agents/<int:agent_id>/delete", methods=["POST"])
     @login_required
@@ -239,7 +308,8 @@ def create_app():
             heel_raise_d=fnum("heel_raise_d"),
             side_hop_g=fnum("side_hop_g"),
             side_hop_d=fnum("side_hop_d"),
-            wall_test=fnum("wall_test"),
+            wall_test_g=fnum("wall_test_g"),
+            wall_test_d=fnum("wall_test_d"),
         )
 
         db.session.add(r)

@@ -35,4 +35,5 @@ class TestResult(db.Model):
     side_hop_g = db.Column(db.Float, nullable=True)
     side_hop_d = db.Column(db.Float, nullable=True)
 
-    wall_test = db.Column(db.Float, nullable=True)
+    wall_test_g = db.Column(db.Float)
+    wall_test_d = db.Column(db.Float)

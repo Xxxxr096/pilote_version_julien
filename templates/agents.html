@@ -81,11 +81,8 @@
 {% endif %}
 
 <div class="d-flex justify-content-end mt-3">
-  <a
-    class="btn btn-outline-accent"
-    href="{{ url_for('agents_export_csv', q=q) }}"
-  >
-    <i class="bi bi-download"></i> Télécharger CSV
+  <a class="btn btn-outline-accent" href="{{ url_for('export_all_csv', q=q) }}">
+    <i class="bi bi-download"></i> Télécharger CSV (tests)
   </a>
 </div>
 {% endblock %}

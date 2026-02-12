@@ -30,7 +30,7 @@
     >
       <!-- Date -->
       <div class="col-12 col-md-4 col-lg-3">
-        <label class="form-label">Date *</label>
+        <label class="form-label">Date </label>
         <input
           type="date"
           class="form-control form-dark"
@@ -55,8 +55,13 @@
                 />
               </div>
               <div class="test-body">
-                <div class="test-title">Assis-debout</div>
-                <div class="test-sub">Valeurs gauche / droite</div>
+                <div class="test-head">
+                  <div>
+                    <div class="test-title">Assis-debout</div>
+                    <div class="test-sub">Valeurs gauche / droite</div>
+                  </div>
+                  <div class="diff-badge" id="diff-assis">—</div>
+                </div>
 
                 <div class="row g-2 mt-2">
                   <div class="col-6">
@@ -91,8 +96,13 @@
                 />
               </div>
               <div class="test-body">
-                <div class="test-title">Heel raise</div>
-                <div class="test-sub">Décoller le talon (G/D)</div>
+                <div class="test-head">
+                  <div>
+                    <div class="test-title">Heel raise</div>
+                    <div class="test-sub">Décoller de talon (G/D)</div>
+                  </div>
+                  <div class="diff-badge" id="diff-heel">—</div>
+                </div>
 
                 <div class="row g-2 mt-2">
                   <div class="col-6">
@@ -127,8 +137,13 @@
                 />
               </div>
               <div class="test-body">
-                <div class="test-title">Side hop</div>
-                <div class="test-sub">Sauts latéraux (G/D)</div>
+                <div class="test-head">
+                  <div>
+                    <div class="test-title">Side hop</div>
+                    <div class="test-sub">Sauts latéraux (G/D)</div>
+                  </div>
+                  <div class="diff-badge" id="diff-side">—</div>
+                </div>
 
                 <div class="row g-2 mt-2">
                   <div class="col-6">
@@ -153,6 +168,7 @@
           </div>
 
           <!-- Wall test -->
+          <!-- Wall test -->
           <div class="col-12 col-lg-6">
             <div class="test-card">
               <div class="test-media">
@@ -163,15 +179,28 @@
                 />
               </div>
               <div class="test-body">
-                <div class="test-title">Wall test</div>
-                <div class="test-sub">Souplesse (1 valeur)</div>
+                <div class="test-head">
+                  <div>
+                    <div class="test-title">Wall test</div>
+                    <div class="test-sub">Souplesse (G/D)</div>
+                  </div>
+                  <div class="diff-badge" id="diff-wall">—</div>
+                </div>
 
                 <div class="row g-2 mt-2">
-                  <div class="col-12">
-                    <label class="form-label small mb-1">Mesure</label>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Gauche</label>
                     <input
                       class="form-control form-dark"
-                      name="wall_test"
+                      name="wall_test_g"
+                      placeholder="ex: 7.5"
+                    />
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Droite</label>
+                    <input
+                      class="form-control form-dark"
+                      name="wall_test_d"
                       placeholder="ex: 7.5"
                     />
                   </div>
@@ -220,7 +249,8 @@
             </td>
             <td>{{ r.heel_raise_g or "-" }} / {{ r.heel_raise_d or "-" }}</td>
             <td>{{ r.side_hop_g or "-" }} / {{ r.side_hop_d or "-" }}</td>
-            <td>{{ r.wall_test or "-" }}</td>
+            <td>{{ r.wall_test_g or "-" }} / {{ r.wall_test_d or "-" }}</td>
+
             <td class="text-end">
               <form
                 class="d-inline"
@@ -246,5 +276,61 @@
     </div>
   </div>
 </div>
+<script>
+  function lsiDeficitPercent(g, d) {
+    const G = parseFloat((g || "").replace(",", "."));
+    const D = parseFloat((d || "").replace(",", "."));
+    if (isNaN(G) || isNaN(D)) return null;
+
+    const strong = Math.max(G, D);
+    const weak = Math.min(G, D);
+
+    if (strong <= 0) return null; // évite division par 0 / valeurs négatives
+    const lsi = weak / strong; // 0..1
+    const deficit = (1 - lsi) * 100;
+
+    return deficit; // ex: 30 => on affichera -30%
+  }
+
+  function setBadge(el, deficit) {
+    if (!el) return;
+
+    if (deficit === null) {
+      el.textContent = "—";
+      el.classList.remove("diff-ok", "diff-warn", "diff-bad");
+      return;
+    }
+
+    el.textContent = "-" + deficit.toFixed(0) + "%";
+
+    // seuils (à ajuster si tu veux)
+    el.classList.remove("diff-ok", "diff-warn", "diff-bad");
+    if (deficit <= 10) el.classList.add("diff-ok");
+    else if (deficit <= 20) el.classList.add("diff-warn");
+    else el.classList.add("diff-bad");
+  }
+
+  function bindDiff(badgeId, gName, dName) {
+    const badge = document.getElementById(badgeId);
+    const gEl = document.querySelector(`[name="${gName}"]`);
+    const dEl = document.querySelector(`[name="${dName}"]`);
+
+    const update = () => {
+      const deficit = lsiDeficitPercent(gEl?.value, dEl?.value);
+      setBadge(badge, deficit);
+    };
+
+    if (gEl) gEl.addEventListener("input", update);
+    if (dEl) dEl.addEventListener("input", update);
+    update();
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    bindDiff("diff-assis", "assis_debout_g", "assis_debout_d");
+    bindDiff("diff-heel", "heel_raise_g", "heel_raise_d");
+    bindDiff("diff-side", "side_hop_g", "side_hop_d");
+    bindDiff("diff-wall", "wall_test_g", "wall_test_d");
+  });
+</script>
 
 {% endblock %}

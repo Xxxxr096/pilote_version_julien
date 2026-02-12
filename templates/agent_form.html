@@ -20,11 +20,21 @@
 
       <div class="col-md-6">
         <label class="form-label">Grade</label>
-        <input class="form-control form-dark" name="grade" />
+        <select class="form-select form-dark" name="grade">
+          <option value="">— Sélectionner —</option>
+          {% for g in grades %}
+            <option value="{{ g }}" {% if agent and agent.grade == g %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="col-md-6">
         <label class="form-label">Caserne</label>
-        <input class="form-control form-dark" name="caserne" />
+        <select class="form-select form-dark" name="caserne">
+          <option value="">— Sélectionner —</option>
+          {% for c in casernes %}
+            <option value="{{ c }}" {% if agent and agent.caserne == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="col-12 d-flex gap-2">

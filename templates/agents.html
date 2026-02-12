@@ -1,0 +1,91 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 m-0">Agents</h1>
+  <a class="btn btn-accent" href="{{ url_for('agent_new') }}">
+    <i class="bi bi-person-plus"></i> Ajouter
+  </a>
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-sm-8 col-md-6">
+    <input
+      class="form-control form-dark"
+      name="q"
+      value="{{ q }}"
+      placeholder="Rechercher (nom, prénom, matricule)"
+    />
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-accent" type="submit">
+      <i class="bi bi-search"></i> Rechercher
+    </button>
+  </div>
+</form>
+
+<div class="card card-dark">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Matricule</th>
+            <th>Nom</th>
+            <th>Prénom</th>
+            <th>Grade</th>
+            <th>Caserne</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in agents %}
+          <tr>
+            <td>{{ a.matricule or "-" }}</td>
+            <td>{{ a.nom }}</td>
+            <td>{{ a.prenom }}</td>
+            <td>{{ a.grade or "-" }}</td>
+            <td>{{ a.caserne or "-" }}</td>
+            <td class="text-end">
+              <a
+                class="btn btn-sm btn-outline-accent"
+                href="{{ url_for('agent_detail', agent_id=a.id) }}"
+              >
+                <i class="bi bi-clipboard-data"></i> Voir
+              </a>
+              <form
+                class="d-inline"
+                method="post"
+                action="{{ url_for('agent_delete', agent_id=a.id) }}"
+                onsubmit="return confirm('Supprimer cet agent ?');"
+              >
+                <button class="btn btn-sm btn-outline-danger" type="submit">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-muted">Aucun agent.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% if searched and agents|length == 0 %}
+<div class="alert alert-warning flash-message">
+  Aucun résultat pour : <strong>{{ q }}</strong>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-end mt-3">
+  <a
+    class="btn btn-outline-accent"
+    href="{{ url_for('agents_export_csv', q=q) }}"
+  >
+    <i class="bi bi-download"></i> Télécharger CSV
+  </a>
+</div>
+{% endblock %}

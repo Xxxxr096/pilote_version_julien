@@ -324,5 +324,12 @@ input, textarea, select{
   color: var(--text);
 }
 
+/* Titres dans les cards (Ajouter résultat / Historique) */
+.card-dark h2,
+.card-dark .h6 {
+  color: var(--text) !important;
+  opacity: 1 !important;
+  font-weight: 700;
+}
 
   

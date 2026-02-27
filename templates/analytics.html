@@ -1,0 +1,283 @@
+{# ========= templates/analytics.html COMPLETE ========= #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h1 class="h4 m-0">Analyse / Statistiques</h1>
+    <div class="text-muted">Vue individuelle + vue globale (dans le temps)</div>
+  </div>
+</div>
+
+<!-- Switch vue -->
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <a
+    class="btn btn-sm {% if view_mode != 'global' %}btn-accent{% else %}btn-outline-accent{% endif %}"
+    href="{{ url_for('analytics',
+      view='individual',
+      agent_id=request.args.get('agent_id',''),
+      test=request.args.get('test','assis_debout')
+    ) }}"
+  >
+    <i class="bi bi-person"></i> Vue individuelle
+  </a>
+
+  <a
+    class="btn btn-sm {% if view_mode == 'global' %}btn-accent{% else %}btn-outline-accent{% endif %}"
+    href="{{ url_for('analytics',
+      view='global',
+      global_test=request.args.get('global_test','assis_debout')
+    ) }}"
+  >
+    <i class="bi bi-people"></i> Vue globale
+  </a>
+</div>
+
+
+{% if view_mode == "global" %}
+
+<!-- =========================
+     VUE GLOBALE (DANS LE TEMPS)
+========================== -->
+<div class="card card-dark mb-3">
+  <div class="card-body">
+    <form class="row g-3" method="get">
+      <input type="hidden" name="view" value="global"/>
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">Test (global)</label>
+        <select class="form-select form-dark" name="global_test" onchange="this.form.submit()">
+          {% for t in tests %}
+            <option value="{{ t.key }}" {% if global_test == t.key %}selected{% endif %}>
+              {{ t.label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-6 d-flex align-items-end">
+        {% if global_summary and global_summary.overall_avg is not none %}
+          {% set v = global_summary.overall_avg %}
+          {% set badge_class = "text-bg-success" %}
+          {% if v > 20 %}{% set badge_class = "text-bg-danger" %}
+          {% elif v > 10 %}{% set badge_class = "text-bg-warning" %}
+          {% endif %}
+
+          <div class="w-100 p-3 rounded border" style="background: rgba(255,255,255,0.03);">
+            <div class="d-flex align-items-center justify-content-between">
+              <div class="fw-semibold">Moyenne période — {{ global_label }}</div>
+              <span class="badge {{ badge_class }}">{{ v }}%</span>
+            </div>
+            <div class="text-muted small mt-1">
+              Calculée sur <strong>{{ global_summary.n_total }}</strong> mesures (tous agents confondus).
+            </div>
+          </div>
+        {% else %}
+          <div class="w-100 text-muted small">
+            Pas assez de données (il faut G et D renseignés).
+          </div>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card card-dark">
+  <div class="card-body">
+    <h2 class="h6 mb-2">
+      <i class="bi bi-graph-up"></i> Déficit moyen (%) dans le temps — {{ global_label }}
+    </h2>
+    <div class="text-muted small mb-3">
+      Chaque point = moyenne des déficits (%) des agents ayant une mesure à cette date.
+      • <= 10% (OK) • 10–20% (à surveiller) • > 20% (risque)
+    </div>
+
+    <div style="height:340px">
+      <canvas id="chartGlobalTime"></canvas>
+    </div>
+
+    {% if global_points|length == 0 %}
+      <div class="text-muted mt-3">Aucune donnée exploitable pour ce test (G/D manquants).</div>
+    {% endif %}
+
+    <hr class="sep my-4"/>
+
+    <!-- Tableau des points -->
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Déficit moyen (%)</th>
+            <th># mesures</th>
+            <th>Lecture</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in global_points %}
+            {% set v = p.avg_deficit %}
+            <tr>
+              <td>{{ p.date }}</td>
+              <td>{{ v }}%</td>
+              <td class="text-muted">{{ p.n }}</td>
+              <td class="text-muted">
+                {% if v <= 10 %}
+                  OK
+                {% elif v <= 20 %}
+                  À surveiller
+                {% else %}
+                  Risque
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          {% if global_points|length == 0 %}
+            <tr>
+              <td colspan="4" class="text-muted">Aucune donnée.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- Chart.js (global) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const globalPoints = {{ global_points|tojson }};
+
+  const labels = globalPoints.map(p => p.date);
+  const values = globalPoints.map(p => p.avg_deficit);
+
+  const ctx = document.getElementById("chartGlobalTime");
+  if (ctx && globalPoints.length > 0) {
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Déficit moyen (%)",
+          data: values,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+</script>
+
+{% else %}
+
+<!-- =========================
+     VUE INDIVIDUELLE
+========================== -->
+<div class="card card-dark mb-3">
+  <div class="card-body">
+    <form class="row g-3" method="get">
+      <input type="hidden" name="view" value="individual"/>
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">Agent</label>
+        <select class="form-select form-dark" name="agent_id" onchange="this.form.submit()">
+          <option value="">— Sélectionner —</option>
+          {% for a in agents %}
+            <option value="{{ a.id }}" {% if selected_agent and selected_agent.id == a.id %}selected{% endif %}>
+              {{ a.nom }} {{ a.prenom }} {% if a.matricule %} ({{ a.matricule }}) {% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">Test</label>
+        <select class="form-select form-dark" name="test" onchange="this.form.submit()">
+          {% for t in tests %}
+            <option value="{{ t.key }}" {% if selected_test == t.key %}selected{% endif %}>
+              {{ t.label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card card-dark">
+  <div class="card-body">
+    {% if not selected_agent %}
+      <div class="text-muted">Sélectionne un agent pour afficher son évolution.</div>
+    {% else %}
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div>
+          <div class="fw-semibold">{{ selected_agent.nom }} {{ selected_agent.prenom }}</div>
+          <div class="text-muted small">
+            Test: <span class="fw-semibold">{{ test_label }}</span> • Courbe G/D + déficit
+          </div>
+        </div>
+      </div>
+
+      <div style="height:360px">
+        <canvas id="chartEvolution"></canvas>
+      </div>
+
+      {% if points|length == 0 %}
+        <div class="text-muted mt-3">Aucun résultat pour cet agent.</div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- Chart.js (individuel) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  const points = {{ points|tojson }};
+
+  function deficitPct(g, d){
+    const G = Number(g);
+    const D = Number(d);
+    if (!isFinite(G) || !isFinite(D)) return null;
+    const strong = Math.max(G, D);
+    const weak   = Math.min(G, D);
+    if (strong <= 0) return null;
+    return (1 - (weak/strong)) * 100;
+  }
+
+  if (document.getElementById("chartEvolution") && points.length > 0) {
+    const labels = points.map(p => p.date);
+
+    const dataG = points.map(p => p.g);
+    const dataD = points.map(p => p.d);
+    const dataDef = points.map(p => {
+      const def = deficitPct(p.g, p.d);
+      return def === null ? null : -Math.round(def);
+    });
+
+    new Chart(document.getElementById("chartEvolution"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Gauche", data: dataG, tension: 0.25 },
+          { label: "Droite", data: dataD, tension: 0.25 },
+          { label: "Déficit (%)", data: dataDef, tension: 0.25 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: false } }
+      }
+    });
+  }
+</script>
+
+{% endif %}
+
+{% endblock %}

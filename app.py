@@ -278,6 +278,143 @@ def create_app():
         )
         return render_template("agent_detail.html", agent=agent, results=results)
 
+    # ========= ROUTE /analytics COMPLETE (vue individuelle + vue globale "dans le temps") =========
+    @app.route("/analytics")
+    @login_required
+    def analytics():
+        # mode: individual (défaut) ou global
+        view_mode = request.args.get("view", "individual").strip()
+
+        # Liste agents (dropdown vue individuelle)
+        agents = Firefighter.query.order_by(
+            Firefighter.nom.asc(), Firefighter.prenom.asc()
+        ).all()
+
+        # Définition des tests
+        tests = [
+            {"key": "assis_debout", "label": "Assis-debout"},
+            {"key": "heel_raise", "label": "Heel raise"},
+            {"key": "side_hop", "label": "Side hop"},
+            {"key": "wall_test", "label": "Wall test"},
+        ]
+        test_keys = [t["key"] for t in tests]
+
+        # -----------------------------
+        # VUE INDIVIDUELLE (inchangée)
+        # -----------------------------
+        agent_id = request.args.get("agent_id", "").strip()
+        selected_agent = None
+
+        selected_test = request.args.get("test", "assis_debout").strip()
+        if selected_test not in test_keys:
+            selected_test = "assis_debout"
+
+        test_label = next(t["label"] for t in tests if t["key"] == selected_test)
+
+        points = []
+        if agent_id.isdigit():
+            selected_agent = Firefighter.query.get(int(agent_id))
+            if selected_agent:
+                results = (
+                    TestResult.query.filter_by(firefighter_id=selected_agent.id)
+                    .order_by(TestResult.date_realisation.asc())
+                    .all()
+                )
+
+                col_g = f"{selected_test}_g"
+                col_d = f"{selected_test}_d"
+
+                for r in results:
+                    points.append(
+                        {
+                            "date": r.date_realisation.strftime("%Y-%m-%d"),
+                            "g": getattr(r, col_g, None),
+                            "d": getattr(r, col_d, None),
+                        }
+                    )
+
+        # -----------------------------
+        # VUE GLOBALE "DANS LE TEMPS"
+        # => pour un test choisi, on calcule pour CHAQUE DATE :
+        #    déficit moyen (%) sur tous les agents ayant une valeur ce jour-là
+        # -----------------------------
+        global_test = request.args.get("global_test", "assis_debout").strip()
+        if global_test not in test_keys:
+            global_test = "assis_debout"
+
+        global_label = next(t["label"] for t in tests if t["key"] == global_test)
+
+        global_points = []  # [{"date": "YYYY-MM-DD", "avg_deficit": 12.3, "n": 8}, ...]
+        global_summary = None  # ex: moyenne globale sur toute la période, etc.
+
+        if view_mode == "global":
+            # Colonnes dynamiques (g/d) selon le test
+            col_g = getattr(TestResult, f"{global_test}_g")
+            col_d = getattr(TestResult, f"{global_test}_d")
+
+            # On récupère toutes les lignes où on a G et D
+            rows = (
+                db.session.query(TestResult.date_realisation, col_g, col_d)
+                .filter(col_g.isnot(None), col_d.isnot(None))
+                .order_by(TestResult.date_realisation.asc())
+                .all()
+            )
+
+            # regroupe par date -> liste de déficits
+            by_date = {}  # date -> [deficits...]
+            for dt, g, d in rows:
+                if g is None or d is None:
+                    continue
+                strong = max(g, d)
+                weak = min(g, d)
+                if strong is None or strong <= 0:
+                    continue
+                deficit = (1 - (weak / strong)) * 100
+
+                by_date.setdefault(dt, []).append(deficit)
+
+            # construit la série triée
+            all_deficits = []
+            for dt in sorted(by_date.keys()):
+                vals = by_date[dt]
+                if not vals:
+                    continue
+                avg = sum(vals) / len(vals)
+                global_points.append(
+                    {
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "avg_deficit": round(avg, 1),
+                        "n": len(vals),
+                    }
+                )
+                all_deficits.extend(vals)
+
+            if all_deficits:
+                global_summary = {
+                    "overall_avg": round(sum(all_deficits) / len(all_deficits), 1),
+                    "n_total": len(all_deficits),
+                }
+            else:
+                global_summary = {"overall_avg": None, "n_total": 0}
+
+        return render_template(
+            "analytics.html",
+            # commun
+            view_mode=view_mode,
+            agents=agents,
+            tests=tests,
+            # individuel
+            selected_agent=selected_agent,
+            selected_test=selected_test,
+            test_label=test_label,
+            points=points,
+            # global
+            global_test=global_test,
+            global_label=global_label,
+            global_points=global_points,
+            global_summary=global_summary,
+        )
+
     @app.route("/agents/<int:agent_id>/results/new", methods=["POST"])
     @login_required
     def result_new(agent_id):
